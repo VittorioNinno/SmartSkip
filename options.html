@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!-- The interface text is intentionally kept in Italian (user-facing); only code names are in English. -->
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Libreria - SMART SKIP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ---------- Design tokens ---------- */
+        :root {
+            --color-bg-page: #121318;
+            --color-bg-card: #1a1b20;
+            --color-bg-input: #25262e;
+            --color-border: #2d2f3d;
+            --color-border-input: #333542;
+            --color-border-strong: #3d3f52;
+            --color-accent: #ff6d00;
+            --color-accent-light: #ffab40;
+            --color-text: #f5f5f7;
+            --color-text-muted: #7e8299;
+            --color-danger: #b71c1c;
+            --color-danger-hover: #d32f2f;
+        }
+
+        /* ---------- Page layout ---------- */
+        body {
+            font-family: 'Outfit', sans-serif;
+            padding: 40px;
+            background: var(--color-bg-page);
+            color: var(--color-text);
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        h1 { font-size: 34px; font-weight: 800; margin-bottom: 35px; letter-spacing: 0.5px; text-transform: uppercase; }
+        h1 span.white { color: #ffffff; }
+        h1 span.orange { color: var(--color-accent); }
+
+        /* ---------- Search / filter / sort bar ---------- */
+        .controls {
+            display: flex; gap: 20px; margin-bottom: 40px;
+            background: var(--color-bg-card); padding: 24px; border-radius: 16px;
+            border: 1px solid var(--color-border); box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        input[type="text"], select {
+            background: var(--color-bg-input); color: #fff; padding: 14px 18px;
+            border: 1px solid var(--color-border-input); border-radius: 10px; flex: 1;
+            outline: none; font-family: inherit; font-size: 15px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type="text"]:focus, select:focus {
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 2px rgba(255, 109, 0, 0.2);
+        }
+        select option { background: var(--color-bg-card); color: #fff; }
+
+        /* ---------- Collapsible platform groups ---------- */
+        .platform-section { margin-bottom: 25px; }
+
+        .platform-header {
+            background: var(--color-bg-input);
+            padding: 16px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--color-accent-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--color-border-strong);
+            letter-spacing: 1px;
+            user-select: none;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .platform-header:hover { background: var(--color-border); border-color: var(--color-accent); }
+
+        /* Arrow indicator: rotates when the group is collapsed */
+        .platform-header::after {
+            content: '▼';
+            font-size: 14px;
+            color: var(--color-text-muted);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .platform-header.collapsed::after { transform: rotate(-90deg); }
+
+        .platform-content {
+            padding-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow: hidden;
+        }
+        .platform-content.hidden { display: none; }
+
+        /* ---------- Series card ---------- */
+        .series-card {
+            background: var(--color-bg-card); padding: 22px 30px; border-radius: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            border: 1px solid var(--color-border); border-left: 6px solid var(--color-accent);
+            transition: background 0.2s, border-color 0.2s;
+        }
+        /* Hover: highlight the card without moving it (a shift to the right would be
+           clipped by the platform group's overflow: hidden). The left accent bar is kept. */
+        .series-card:hover { background: #1f2027; border-color: #4a4d65 #4a4d65 #4a4d65 var(--color-accent); }
+
+        .info-container { display: flex; align-items: center; gap: 15px; }
+        .series-title { font-size: 19px; font-weight: 700; color: #ffffff; }
+        .platform-badge {
+            padding: 5px 12px; background: #2a2c3a; border-radius: 20px;
+            font-size: 12px; color: var(--color-accent-light); text-transform: uppercase;
+            font-weight: 800; letter-spacing: 0.5px;
+            border: 1px solid rgba(255,171,64,0.15);
+        }
+
+        /* Chips (one per skip type) + delete button, all on a single row */
+        .card-actions { display: flex; align-items: center; gap: 15px; }
+        .rules-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+        /* A chip is a label wrapping a hidden checkbox: lit = skip automatically */
+        .rule-chip { position: relative; cursor: pointer; user-select: none; }
+        .rule-chip input { position: absolute; opacity: 0; pointer-events: none; } /* hidden but keyboard-focusable */
+        .rule-chip span {
+            display: inline-block; padding: 8px 14px; border-radius: 20px;
+            font-size: 13px; font-weight: 700;
+            background: var(--color-bg-input); color: var(--color-text-muted);
+            border: 1px solid var(--color-border-strong);
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .rule-chip:hover span { border-color: #5a5d7a; }
+        .rule-chip input:checked + span {
+            background: rgba(255, 109, 0, 0.15); color: var(--color-accent-light);
+            border-color: var(--color-accent);
+        }
+        .rule-chip input:checked + span::before { content: '✓ '; } /* state is not only a color */
+        .rule-chip input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+        /* Short explanation under the controls bar */
+        .hint { margin: -20px 0 28px; font-size: 14px; color: var(--color-text-muted); }
+
+        .btn-delete {
+            background: var(--color-danger); color: #ffcdd2; border: none;
+            padding: 12px 20px; border-radius: 10px; cursor: pointer;
+            font-weight: bold; font-size: 14px; transition: 0.2s;
+        }
+        .btn-delete:hover { background: var(--color-danger-hover); color: #fff; box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3); }
+
+        /* Message shown when no series matches */
+        .empty-state { text-align: center; padding: 60px; color: var(--color-text-muted); font-style: italic; background: var(--color-bg-card); border-radius: 14px; border: 1px dashed var(--color-border-input); }
+    </style>
+</head>
+<body>
+    <h1><span class="white">Libreria</span> <span class="orange">SMART SKIP</span></h1>
+
+    <!-- Search, platform filter and sort order. Handled in options.js -->
+    <div class="controls">
+        <input type="text" id="search-input" placeholder="Cerca una serie registrata...">
+
+        <!-- Option values are matched (lowercase) against the stored platform label -->
+        <select id="platform-filter">
+            <option value="all">Tutte le piattaforme</option>
+            <option value="crunchyroll">Crunchyroll</option>
+            <option value="netflix">Netflix</option>
+            <option value="prime video">Prime Video</option>
+            <option value="disney+">Disney+</option>
+        </select>
+
+        <select id="sort-order">
+            <option value="title-asc">Ordine Alfabetico (A-Z)</option>
+            <option value="title-desc">Ordine Alfabetico (Z-A)</option>
+        </select>
+    </div>
+
+    <p class="hint">Per ogni serie, i tipi con la spunta vengono saltati in automatico; quelli spenti restano da guardare. Un tipo compare qui la prima volta che viene incontrato.</p>
+
+    <!-- Filled dynamically by options.js: one collapsible section per platform -->
+    <div id="series-list"></div>
+
+    <script src="options.js"></script>
+</body>
+</html>

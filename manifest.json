@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Skip",
+  "version": "1.0",
+  "description": "Automatically skips intros, or lets you set custom skip rules for each series.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.crunchyroll.com/*",
+        "*://*.netflix.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.disneyplus.com/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

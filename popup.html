@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<!-- The interface text is intentionally kept in Italian (user-facing); only code names are in English. -->
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>SMART SKIP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ---------- Design tokens ---------- */
+        :root {
+            --color-bg-page: #121318;
+            --color-bg-card: #1a1b20;
+            --color-border: #2d2f3d;
+            --color-border-input: #333542;
+            --color-accent: #ff6d00;
+            --color-text: #f5f5f7;
+            --color-text-muted: #7e8299;
+            --color-danger: #b71c1c;
+            --color-danger-hover: #d32f2f;
+        }
+
+        /* ---------- Page layout ---------- */
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--color-bg-page);
+            color: var(--color-text);
+            width: 320px;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative; /* The confirmation modal is positioned relative to the body */
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 25px;
+            letter-spacing: 0.5px;
+        }
+        h2 span.white { color: #ffffff; }
+        h2 span.orange { color: var(--color-accent); }
+
+        /* ---------- Toggle cards (a card contains one or more toggle rows) ---------- */
+        .toggle-card {
+            background: var(--color-bg-card);
+            border: 1px solid var(--color-border);
+            padding: 15px 18px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: opacity 0.2s;
+        }
+        /* Applied by popup.js to the per-type card when the master switch is off */
+        .toggle-card.dimmed { opacity: 0.45; }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            font-size: 15px;
+            color: #ffffff;
+        }
+
+        /* Switch: the real checkbox is hidden, the slider is drawn with CSS */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--color-border-input);
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 26px;
+        }
+        /* The round knob */
+        .slider:before {
+            position: absolute; content: "";
+            height: 20px; width: 20px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--color-accent); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        /* ---------- Main buttons ---------- */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: 0.2s;
+            margin-bottom: 12px;
+        }
+
+        .btn-library {
+            background: linear-gradient(135deg, #ff6d00, #e65100);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3);
+        }
+        .btn-library:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #d32f2f, #b71c1c);
+            color: white;
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
+        }
+        .btn-reset:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* ---------- Confirmation modal (covers the whole popup) ---------- */
+        #confirm-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(18, 19, 24, 0.92);
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        /* Shown by popup.js by adding the "active" class */
+        #confirm-modal.active { display: flex; }
+
+        .modal-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text);
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn-modal {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn-cancel { background: var(--color-border-input); color: #fff; }
+        .btn-cancel:hover { background: #444758; }
+
+        .btn-confirm { background: var(--color-danger); color: #fff; }
+        .btn-confirm:hover { background: var(--color-danger-hover); }
+    </style>
+</head>
+<body>
+    <h2><span class="white">SMART</span> <span class="orange">SKIP</span></h2>
+
+    <!-- Master on/off switch. Handled in popup.js -->
+    <div class="toggle-card">
+        <div class="toggle-row">
+            <span class="toggle-label">Estensione attiva</span>
+            <label class="switch">
+                <input type="checkbox" id="enable-toggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- One switch per skip type (intro, recap, ...). The rows are created by popup.js -->
+    <div class="toggle-card" id="skip-types-card">
+        <span class="card-title">Tipi di salto</span>
+    </div>
+
+    <button class="btn btn-library" id="open-library-button">Gestisci Serie Salvate</button>
+    <button class="btn btn-reset" id="reset-memory-button">Azzera Memoria</button>
+
+    <!-- Confirmation shown before deleting all saved data -->
+    <div id="confirm-modal">
+        <div class="modal-text">Vuoi davvero azzerare tutta la memoria e le serie salvate?</div>
+        <div class="modal-buttons">
+            <button class="btn-modal btn-cancel" id="cancel-button">Annulla</button>
+            <button class="btn-modal btn-confirm" id="confirm-button">Procedi</button>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
