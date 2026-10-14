@@ -131,10 +131,8 @@ const PLATFORMS = [
         id: 'netflix',
         label: 'NETFLIX',
         hostnames: ['netflix.com'],
-        // TODO: split recap into its own type (button[data-uia="player-skip-recap"])
         skipButtons: {
-            [SKIP_TYPES.INTRO]:
-                'button[data-uia="player-skip-intro"], button[data-uia="player-skip-recap"]'
+            [SKIP_TYPES.INTRO]: 'button[data-uia="player-skip-intro"]'
         },
         getTitle: () => {
             const container = document.querySelector('[data-uia="video-title"]');
