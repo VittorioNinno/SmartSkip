@@ -136,6 +136,32 @@
         .rule-chip input:checked + span::before { content: '✓ '; } /* state is not only a color */
         .rule-chip input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
+        /* Mixed state of a group chip: its entries have different rules */
+        .rule-chip input:indeterminate + span {
+            background: rgba(255, 109, 0, 0.06); color: var(--color-accent-light);
+            border-color: var(--color-accent); border-style: dashed;
+        }
+        .rule-chip input:indeterminate + span::before { content: '– '; }
+
+        /* ---------- Series group (entries with the same base title, e.g. seasons) ---------- */
+        .series-group { display: flex; flex-direction: column; gap: 10px; }
+
+        /* The heading (title + count) is the clickable area that opens/closes the group */
+        .group-heading { cursor: pointer; user-select: none; }
+        .group-heading::before {
+            content: '▼'; font-size: 12px; color: var(--color-text-muted);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .group-card.collapsed .group-heading::before { transform: rotate(-90deg); }
+        .group-count { font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+
+        /* Entries of the group, slightly indented and visually lighter than the header */
+        .group-children { display: flex; flex-direction: column; gap: 10px; margin-left: 28px; }
+        .group-children.hidden { display: none; }
+        .child-card { padding: 14px 24px; border-left-width: 4px; }
+        .child-card, .child-card:hover { border-left-color: var(--color-border-strong); }
+        .child-title { font-size: 16px; font-weight: 600; color: #dcdce2; }
+
         /* Short explanation under the controls bar */
         .hint { margin: -20px 0 28px; font-size: 14px; color: var(--color-text-muted); }
 
@@ -172,7 +198,7 @@
         </select>
     </div>
 
-    <p class="hint">Per ogni serie, i tipi con la spunta vengono saltati in automatico; quelli spenti restano da guardare. Un tipo compare qui la prima volta che viene incontrato.</p>
+    <p class="hint">Per ogni serie, i tipi con la spunta vengono saltati in automatico; quelli spenti restano da guardare. Un tipo compare qui la prima volta che viene incontrato. Le voci con lo stesso titolo base (per esempio più stagioni) sono raggruppate: le chip del gruppo applicano la stessa impostazione a tutte le sue voci.</p>
 
     <!-- Filled dynamically by options.js: one collapsible section per platform -->
     <div id="series-list"></div>

@@ -11,6 +11,7 @@ Estensione per browser (Chrome e Microsoft Edge) che salta automaticamente intro
 * **Regole per serie**: per ogni tipo si sceglie "salta in automatico" oppure "non saltare mai".
 * **Interruttori nel popup**: uno principale e uno per ciascun tipo di salto, con effetto immediato.
 * **Libreria**: serie raggruppate per piattaforma, con ricerca, filtro per piattaforma e ordinamento A-Z / Z-A.
+* **Raggruppamento per serie**: le voci con lo stesso titolo base (il testo prima di ` - `, per esempio "Show", "Show - Stagione 2", "Show - To The Top") sono mostrate in un gruppo. Le chip del gruppo sono le impostazioni generali e si applicano a tutte le voci che hanno già quel tipo; sotto, ogni voce ha le proprie chip.
 
 ---
 
@@ -20,10 +21,10 @@ Estensione per browser (Chrome e Microsoft Edge) che salta automaticamente intro
 |---|:---:|:---:|:---:|:---:|
 | Crunchyroll | ✓ | ✓ | ✓ | ✓ |
 | Netflix | ✓ | – | – | – |
-| Prime Video | ✓ | – | – | – |
+| Prime Video | ✓ | ✓ | – | – |
 | Disney+ | ✓ | – | – | – |
 
-I selettori di Crunchyroll usano le etichette italiane (`aria-label`). Quelle inglesi sono ipotesi non ancora verificate.
+I selettori basati su `aria-label` di Crunchyroll e Prime Video usano le etichette italiane. Per Crunchyroll le etichette inglesi sono ipotesi non ancora verificate.
 
 ---
 
@@ -105,6 +106,7 @@ Dopo ogni modifica ai file: ricaricare l'estensione dalla stessa pagina e **rica
 
 * Se si ricarica la scheda a metà di un segmento appena registrato, quel segmento viene saltato (la protezione vive solo nella pagina).
 * L'episodio è riconosciuto dal percorso dell'indirizzo: se un sito non lo cambia tra un episodio e l'altro, serve un identificatore specifico per quella piattaforma.
+* Il raggruppamento dipende dal titolo: due opere diverse con lo stesso testo prima di ` - ` verrebbero raggruppate. Le impostazioni del gruppo valgono solo per le voci e i tipi già registrati: una nuova stagione parte con il comportamento predefinito (prima visione lasciata scorrere).
 * I selettori dipendono dalle pagine dei servizi, che possono cambiare senza preavviso.
 
 ---

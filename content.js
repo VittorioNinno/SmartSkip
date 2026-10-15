@@ -147,9 +147,15 @@ const PLATFORMS = [
         id: 'primevideo',
         label: 'PRIME VIDEO',
         hostnames: ['primevideo.com'],
+        // The older player marks every skip button with the same "skipElement" class,
+        // so the generic class selectors of the intro explicitly exclude the recap button.
         skipButtons: {
             [SKIP_TYPES.INTRO]:
-                'button[aria-label="Salta intro"], button[aria-label="Skip intro"], .atvwebplayersdk-skipelement-button, [class*="skipElement"]'
+                'button[aria-label="Salta intro"], button[aria-label="Skip intro"], ' +
+                '.atvwebplayersdk-skipelement-button:not([aria-label="Salta riassunto"]), ' +
+                '[class*="skipElement"]:not([aria-label="Salta riassunto"])',
+            [SKIP_TYPES.RECAP]:
+                'button[aria-label="Salta riassunto"]'
         },
         getTitle: () => {
             // Preferred source: the page title, e.g. "Prime Video: Series Name"

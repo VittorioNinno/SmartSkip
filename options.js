@@ -2,9 +2,11 @@
  * Smart Skip Intro - options page (series library)
  *
  * Reads every series registered by content.js from chrome.storage.local and
- * shows them grouped by platform. The user can search, filter by platform,
- * sort, change the skip rule of each segment type (intro, recap, ...) of a
- * series, or delete the series.
+ * shows them grouped by platform. Entries that share the same base title
+ * (e.g. "Show", "Show - Stagione 2", "Show - To The Top") are shown together
+ * in one group: the group row holds the general settings, the entries below
+ * hold the specific ones. The user can search, filter by platform, sort,
+ * change the skip rule of each segment type, or delete entries.
  */
 document.addEventListener('DOMContentLoaded', () => {
     // -----------------------------------------------------------------------
@@ -28,6 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
         { type: 'preview', label: 'Anteprima' }
     ];
 
+    // Entries are grouped by the text before this separator: "Show - Stagione 2" -> "Show"
+    const TITLE_SEPARATOR = ' - ';
+
+    // Label of the entry whose title is exactly the base title (no suffix)
+    const MAIN_ENTRY_LABEL = 'Principale';
+
+    // State of a chip. A group chip is MIXED when its entries disagree.
+    const CHIP_STATE = Object.freeze({ ALL: 'all', NONE: 'none', MIXED: 'mixed' });
+
     // -----------------------------------------------------------------------
     // DOM references and state
     // -----------------------------------------------------------------------
@@ -40,9 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Every valid entry found in storage, as { storageKey, record }
     let allSeries = [];
 
-    // Platforms the user collapsed. Remembered so that re-rendering the list
-    // (e.g. after deleting a series) does not expand them again.
+    // Remembered so that re-rendering the list (e.g. after deleting or changing
+    // a rule) does not reset what the user opened or closed.
     const collapsedPlatforms = new Set();
+    const expandedGroups = new Set(); // groups are collapsed by default
 
     // -----------------------------------------------------------------------
     // Data loading
@@ -69,27 +81,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -----------------------------------------------------------------------
-    // Filtering, sorting and grouping
+    // Filtering, grouping and sorting
     // -----------------------------------------------------------------------
 
-    /** Applies the search text, the platform filter and the sort order. */
+    /** Applies the search text and the platform filter. */
     function getVisibleSeries() {
         const searchText = searchInput.value.toLowerCase();
         const selectedPlatform = platformFilter.value; // 'all' or a lowercase platform name
 
-        const visibleSeries = allSeries.filter(({ record }) => {
+        return allSeries.filter(({ record }) => {
             const matchesSearch = record.title.toLowerCase().includes(searchText);
             const platformName = (record.platform || '').toLowerCase();
             const matchesPlatform = selectedPlatform === 'all' || platformName.includes(selectedPlatform);
             return matchesSearch && matchesPlatform;
         });
-
-        const direction = sortOrder.value === 'title-desc' ? -1 : 1;
-        visibleSeries.sort((a, b) =>
-            direction * a.record.title.toLowerCase().localeCompare(b.record.title.toLowerCase())
-        );
-
-        return visibleSeries;
     }
 
     /** Groups series by platform name: { 'NETFLIX': [item, ...], ... } */
@@ -103,8 +108,61 @@ document.addEventListener('DOMContentLoaded', () => {
         return groups;
     }
 
+    /** "Show - Stagione 2" -> "Show". A title without separator is its own base. */
+    function getBaseTitle(title) {
+        const separatorIndex = title.indexOf(TITLE_SEPARATOR);
+        return (separatorIndex > 0 ? title.slice(0, separatorIndex) : title).trim();
+    }
+
+    /** "Show - Stagione 2" -> "Stagione 2". The bare base title -> MAIN_ENTRY_LABEL. */
+    function getVariantLabel(title) {
+        const separatorIndex = title.indexOf(TITLE_SEPARATOR);
+        if (separatorIndex <= 0) return MAIN_ENTRY_LABEL;
+        return title.slice(separatorIndex + TITLE_SEPARATOR.length).trim() || MAIN_ENTRY_LABEL;
+    }
+
+    /**
+     * Splits the entries of one platform into groups sharing the same base title,
+     * sorted by base title (direction from the sort selector). Entries inside a
+     * group are always sorted A-Z with numbers in natural order (Stagione 2 < Stagione 10).
+     */
+    function groupByBaseTitle(seriesItems) {
+        const groupsByKey = new Map();
+        for (const item of seriesItems) {
+            const baseTitle = getBaseTitle(item.record.title);
+            const groupKey = baseTitle.toLowerCase();
+            if (!groupsByKey.has(groupKey)) {
+                groupsByKey.set(groupKey, { groupKey: groupKey, baseTitle: baseTitle, items: [] });
+            }
+            groupsByKey.get(groupKey).items.push(item);
+        }
+
+        const direction = sortOrder.value === 'title-desc' ? -1 : 1;
+        const groups = [...groupsByKey.values()];
+        groups.sort((a, b) => direction * a.groupKey.localeCompare(b.groupKey));
+        groups.forEach((group) => {
+            group.items.sort((a, b) =>
+                a.record.title.localeCompare(b.record.title, undefined, { numeric: true, sensitivity: 'base' })
+            );
+        });
+        return groups;
+    }
+
+    /** Skip types that appear in at least one of the entries, in display order. */
+    function getRegisteredTypes(items) {
+        return SKIP_TYPE_LABELS.filter(({ type }) => items.some((item) => item.record.rules[type]));
+    }
+
+    /** State of a group chip: do all the entries that have this type agree? */
+    function getGroupChipState(items, skipType) {
+        const rules = items.map((item) => item.record.rules[skipType]).filter(Boolean);
+        if (rules.every((rule) => rule === RULE_AUTO_SKIP)) return CHIP_STATE.ALL;
+        if (rules.every((rule) => rule === RULE_NEVER_SKIP)) return CHIP_STATE.NONE;
+        return CHIP_STATE.MIXED;
+    }
+
     // -----------------------------------------------------------------------
-    // Rendering
+    // Rendering: list and platform sections
     // -----------------------------------------------------------------------
 
     /** Redraws the whole list according to the current search/filter/sort. */
@@ -121,18 +179,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const groups = groupByPlatform(visibleSeries);
-        Object.keys(groups).sort().forEach((platformName) => {
-            seriesListElement.appendChild(createPlatformSection(platformName, groups[platformName]));
+        const platforms = groupByPlatform(visibleSeries);
+        Object.keys(platforms).sort().forEach((platformName) => {
+            seriesListElement.appendChild(createPlatformSection(platformName, platforms[platformName]));
         });
     }
 
-    /** Builds a collapsible section containing the cards of one platform. */
+    /** Builds a collapsible section containing the cards and groups of one platform. */
     function createPlatformSection(platformName, items) {
         const section = document.createElement('div');
         section.className = 'platform-section';
 
-        // Header: platform name + number of series
+        // Header: platform name + number of entries
         const header = document.createElement('div');
         header.className = 'platform-header';
 
@@ -146,11 +204,15 @@ document.addEventListener('DOMContentLoaded', () => {
         nameElement.appendChild(countElement);
         header.appendChild(nameElement);
 
-        // Content: one card per series
+        // Content: a plain card for single entries, a group for several
         const content = document.createElement('div');
         content.className = 'platform-content';
-        items.forEach((item) => {
-            content.appendChild(createSeriesCard(item.storageKey, item.record));
+        groupByBaseTitle(items).forEach((group) => {
+            if (group.items.length === 1) {
+                content.appendChild(createSeriesCard(group.items[0], false));
+            } else {
+                content.appendChild(createSeriesGroup(platformName, group));
+            }
         });
 
         // Restore the collapsed state from previous renders
@@ -159,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             content.classList.add('hidden');
         }
 
-        // Clicking the header collapses/expands the group
+        // Clicking the header collapses/expands the platform
         header.addEventListener('click', () => {
             const isNowCollapsed = header.classList.toggle('collapsed');
             content.classList.toggle('hidden', isNowCollapsed);
@@ -172,67 +234,117 @@ document.addEventListener('DOMContentLoaded', () => {
         return section;
     }
 
+    // -----------------------------------------------------------------------
+    // Rendering: chips
+    // -----------------------------------------------------------------------
+
     /**
-     * Builds a chip for one skip type. The rule is binary, so a checkbox is enough:
-     * checked = skip automatically, unchecked = never skip.
+     * Builds a chip. ALL = checked, NONE = unchecked, MIXED = indeterminate
+     * (only used by groups). onToggle receives the new checked value.
      */
-    function createRuleChip(storageKey, record, skipType, label) {
+    function createRuleChip(label, state, tooltip, onToggle) {
         const chip = document.createElement('label');
         chip.className = 'rule-chip';
-        chip.title = 'Acceso: salta in automatico. Spento: non saltare mai.';
+        chip.title = tooltip;
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = record.rules[skipType] === RULE_AUTO_SKIP;
+        checkbox.checked = state === CHIP_STATE.ALL;
+        checkbox.indeterminate = state === CHIP_STATE.MIXED;
 
         const text = document.createElement('span');
         text.textContent = label;
 
-        // Save the new rule as soon as the user toggles the chip
-        checkbox.addEventListener('change', () => {
-            record.rules[skipType] = checkbox.checked ? RULE_AUTO_SKIP : RULE_NEVER_SKIP;
-            chrome.storage.local.set({ [storageKey]: record });
-        });
+        checkbox.addEventListener('change', () => onToggle(checkbox.checked));
 
         chip.appendChild(checkbox);
         chip.appendChild(text);
         return chip;
     }
 
-    /** Builds the row of chips for the skip types registered for a series. */
-    function createRulesList(storageKey, record) {
+    /** Chips of a single entry: checked = skip automatically, unchecked = never skip. */
+    function createEntryRulesList(item) {
+        const { storageKey, record } = item;
         const rulesList = document.createElement('div');
         rulesList.className = 'rules-list';
 
-        SKIP_TYPE_LABELS.forEach(({ type, label }) => {
-            if (!record.rules[type]) return; // type never seen for this series
-            rulesList.appendChild(createRuleChip(storageKey, record, type, label));
+        getRegisteredTypes([item]).forEach(({ type, label }) => {
+            const state = record.rules[type] === RULE_AUTO_SKIP ? CHIP_STATE.ALL : CHIP_STATE.NONE;
+            rulesList.appendChild(createRuleChip(
+                label,
+                state,
+                'Acceso: salta in automatico. Spento: non saltare mai.',
+                (isChecked) => {
+                    record.rules[type] = isChecked ? RULE_AUTO_SKIP : RULE_NEVER_SKIP;
+                    chrome.storage.local.set({ [storageKey]: record });
+                }
+            ));
         });
 
         return rulesList;
     }
 
-    /** Builds the card of a single series: title, platform badge, rules and delete button. */
-    function createSeriesCard(storageKey, record) {
-        const card = document.createElement('div');
-        card.className = 'series-card';
+    /** Sets the same rule on every entry of the group that already has this type. */
+    function applyRuleToGroup(items, skipType, isAutoSkip) {
+        const updates = {};
+        items.forEach(({ storageKey, record }) => {
+            if (!record.rules[skipType]) return; // type never seen for this entry: left alone
+            record.rules[skipType] = isAutoSkip ? RULE_AUTO_SKIP : RULE_NEVER_SKIP;
+            updates[storageKey] = record;
+        });
+        // Redraw afterwards so the chips of the entries below show the new state
+        chrome.storage.local.set(updates, () => renderSeriesList());
+    }
 
-        // Left side: title and platform badge (textContent avoids HTML injection)
+    /** General chips of a group: one per type found in any of its entries. */
+    function createGroupRulesList(items) {
+        const rulesList = document.createElement('div');
+        rulesList.className = 'rules-list';
+
+        getRegisteredTypes(items).forEach(({ type, label }) => {
+            rulesList.appendChild(createRuleChip(
+                label,
+                getGroupChipState(items, type),
+                'Applica a tutte le voci del gruppo. Il trattino indica impostazioni diverse tra le voci.',
+                (isChecked) => applyRuleToGroup(items, type, isChecked)
+            ));
+        });
+
+        return rulesList;
+    }
+
+    // -----------------------------------------------------------------------
+    // Rendering: cards and groups
+    // -----------------------------------------------------------------------
+
+    /**
+     * Card of a single entry. As a group child it shows only the variant label
+     * ("Stagione 2") and no platform badge, because the group already gives the context.
+     */
+    function createSeriesCard(item, isGroupChild) {
+        const { storageKey, record } = item;
+
+        const card = document.createElement('div');
+        card.className = isGroupChild ? 'series-card child-card' : 'series-card';
+
+        // Left side: title (and platform badge). textContent avoids HTML injection.
         const info = document.createElement('div');
         info.className = 'info-container';
 
         const titleElement = document.createElement('div');
-        titleElement.className = 'series-title';
-        titleElement.textContent = record.title;
-
-        const badgeElement = document.createElement('div');
-        badgeElement.className = 'platform-badge';
-        badgeElement.textContent = record.platform || UNKNOWN_PLATFORM_LABEL;
-
+        titleElement.className = isGroupChild ? 'series-title child-title' : 'series-title';
+        titleElement.textContent = isGroupChild ? getVariantLabel(record.title) : record.title;
+        titleElement.title = record.title; // full title as tooltip
         info.appendChild(titleElement);
-        info.appendChild(badgeElement);
 
-        // Right side: rules and delete button
+        if (!isGroupChild) {
+            const badgeElement = document.createElement('div');
+            badgeElement.className = 'platform-badge';
+            badgeElement.textContent = record.platform || UNKNOWN_PLATFORM_LABEL;
+            info.appendChild(badgeElement);
+        }
+
+        // Right side: chips and delete button
         const deleteButton = document.createElement('button');
         deleteButton.className = 'btn-delete';
         deleteButton.textContent = 'Elimina';
@@ -242,12 +354,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const actions = document.createElement('div');
         actions.className = 'card-actions';
-        actions.appendChild(createRulesList(storageKey, record));
+        actions.appendChild(createEntryRulesList(item));
         actions.appendChild(deleteButton);
 
         card.appendChild(info);
         card.appendChild(actions);
         return card;
+    }
+
+    /**
+     * Group of entries with the same base title: a header row with the general
+     * settings, and a collapsible list with one card per entry.
+     */
+    function createSeriesGroup(platformName, group) {
+        const groupId = `${platformName}::${group.groupKey}`;
+        const isExpanded = expandedGroups.has(groupId);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'series-group';
+
+        // Header row
+        const headerCard = document.createElement('div');
+        headerCard.className = 'series-card group-card' + (isExpanded ? '' : ' collapsed');
+
+        const heading = document.createElement('div');
+        heading.className = 'info-container group-heading'; // the arrow is drawn in CSS
+
+        const titleElement = document.createElement('div');
+        titleElement.className = 'series-title';
+        titleElement.textContent = group.baseTitle;
+
+        const countElement = document.createElement('div');
+        countElement.className = 'group-count';
+        countElement.textContent = `${group.items.length} stagioni`;
+
+        heading.appendChild(titleElement);
+        heading.appendChild(countElement);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn-delete';
+        deleteButton.textContent = 'Elimina';
+        deleteButton.addEventListener('click', () => {
+            const message = `Eliminare "${group.baseTitle}" e le sue ${group.items.length} voci?`;
+            if (!confirm(message)) return;
+            chrome.storage.local.remove(group.items.map((item) => item.storageKey), () => loadSeries());
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+        actions.appendChild(createGroupRulesList(group.items));
+        actions.appendChild(deleteButton);
+
+        headerCard.appendChild(heading);
+        headerCard.appendChild(actions);
+
+        // Children: one card per entry
+        const children = document.createElement('div');
+        children.className = 'group-children' + (isExpanded ? '' : ' hidden');
+        group.items.forEach((item) => {
+            children.appendChild(createSeriesCard(item, true));
+        });
+
+        // Only the heading toggles the group, so clicking chips/buttons does not
+        heading.addEventListener('click', () => {
+            const isNowCollapsed = headerCard.classList.toggle('collapsed');
+            children.classList.toggle('hidden', isNowCollapsed);
+            if (isNowCollapsed) expandedGroups.delete(groupId);
+            else expandedGroups.add(groupId);
+        });
+
+        wrapper.appendChild(headerCard);
+        wrapper.appendChild(children);
+        return wrapper;
     }
 
     // -----------------------------------------------------------------------
